@@ -436,4 +436,203 @@ class DecisionTree:
             feature_name = (self.feature_names[node.feature] if self.feature_names 
                            else f"Feature {node.feature}")
             
-            result = f"{prefix}├─ {feature_name} <= {node.threshold:.3f
+            result = f"{prefix}├─ {feature_name} <= {node.threshold:.3f} (samples: {node.samples})\n"
+            
+            # Left child (True branch)
+            result += _build_tree_string(node.left, depth + 1, prefix + "│  ")
+            
+            # Right child (False branch)
+            result += f"{prefix}├─ {feature_name} > {node.threshold:.3f} (samples: {node.right.samples})\n"
+            result += _build_tree_string(node.right, depth + 1, prefix + "   ")
+            
+            return result
+        
+        return _build_tree_string(self.root)
+
+def create_sample_data():
+    """Create sample datasets for demonstration."""
+    # Dataset 1: Iris dataset
+    iris = load_iris()
+    X_iris, y_iris = iris.data, iris.target
+    
+    # Dataset 2: Synthetic dataset
+    X_synthetic, y_synthetic = make_classification(
+        n_samples=1000, n_features=4, n_informative=3, n_redundant=1,
+        n_clusters_per_class=1, random_state=42
+    )
+    
+    return [(X_iris, y_iris, iris.feature_names, iris.target_names),
+            (X_synthetic, y_synthetic, 
+             [f'Feature_{i}' for i in range(X_synthetic.shape[1])], 
+             [f'Class_{i}' for i in range(len(np.unique(y_synthetic)))])]
+
+def compare_criteria(X: np.ndarray, y: np.ndarray, feature_names: List[str] = None):
+    """Compare different splitting criteria."""
+    criteria = ['gini', 'entropy']
+    results = {}
+    
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    
+    plt.figure(figsize=(15, 5))
+    
+    for i, criterion in enumerate(criteria, 1):
+        # Train tree
+        tree = DecisionTree(max_depth=5, criterion=criterion)
+        tree.feature_names = feature_names
+        tree.fit(X_train, y_train)
+        
+        # Evaluate
+        train_score = tree.score(X_train, y_train)
+        test_score = tree.score(X_test, y_test)
+        tree_info = tree.get_tree_info()
+        
+        results[criterion] = {
+            'train_score': train_score,
+            'test_score': test_score,
+            'tree_info': tree_info
+        }
+        
+        # Plot feature importances
+        plt.subplot(1, 3, i)
+        if tree.feature_importances_ is not None:
+            feature_names_plot = (feature_names if feature_names 
+                                else [f'Feature {j}' for j in range(len(tree.feature_importances_))])
+            indices = np.argsort(tree.feature_importances_)[::-1]
+            
+            plt.bar(range(len(tree.feature_importances_)), 
+                    tree.feature_importances_[indices])
+            plt.title(f'{criterion.title()} Criterion\nTest Acc: {test_score:.3f}')
+            plt.xlabel('Features')
+            plt.ylabel('Importance')
+            plt.xticks(range(len(tree.feature_importances_)), 
+                      [feature_names_plot[j] for j in indices], rotation=45)
+    
+    # Comparison plot
+    plt.subplot(1, 3, 3)
+    criteria_names = list(results.keys())
+    train_scores = [results[c]['train_score'] for c in criteria_names]
+    test_scores = [results[c]['test_score'] for c in criteria_names]
+    
+    x_pos = np.arange(len(criteria_names))
+    width = 0.35
+    
+    plt.bar(x_pos - width/2, train_scores, width, label='Train', alpha=0.8)
+    plt.bar(x_pos + width/2, test_scores, width, label='Test', alpha=0.8)
+    
+    plt.xlabel('Criterion')
+    plt.ylabel('Accuracy')
+    plt.title('Criterion Comparison')
+    plt.xticks(x_pos, criteria_names)
+    plt.legend()
+    plt.ylim(0, 1)
+    
+    plt.tight_layout()
+    plt.show()
+    
+    return results
+
+def study_overfitting(X: np.ndarray, y: np.ndarray):
+    """Study overfitting with different max_depth values."""
+    X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+    
+    max_depths = range(1, 16)
+    train_scores = []
+    test_scores = []
+    
+    for depth in max_depths:
+        tree = DecisionTree(max_depth=depth, criterion='gini')
+        tree.fit(X_train, y_train)
+        
+        train_score = tree.score(X_train, y_train)
+        test_score = tree.score(X_test, y_test)
+        
+        train_scores.append(train_score)
+        test_scores.append(test_score)
+    
+    plt.figure(figsize=(10, 6))
+    plt.plot(max_depths, train_scores, 'o-', label='Training Accuracy', linewidth=2)
+    plt.plot(max_depths, test_scores, 's-', label='Test Accuracy', linewidth=2)
+    
+    plt.xlabel('Max Depth')
+    plt.ylabel('Accuracy')
+    plt.title('Training vs Test Accuracy by Tree Depth')
+    plt.legend()
+    plt.grid(True, alpha=0.3)
+    plt.show()
+    
+    # Find optimal depth
+    optimal_depth = max_depths[np.argmax(test_scores)]
+    print(f"Optimal depth based on test accuracy: {optimal_depth}")
+    
+    return optimal_depth
+
+def main():
+    """Demonstrate decision tree implementation."""
+    print("Decision Tree Implementation Demo")
+    print("=" * 40)
+    
+    # Create sample data
+    datasets = create_sample_data()
+    
+    for i, (X, y, feature_names, class_names) in enumerate(datasets, 1):
+        dataset_name = "Iris Dataset" if i == 1 else "Synthetic Dataset"
+        print(f"\n{dataset_name}")
+        print(f"Data shape: {X.shape}")
+        print(f"Number of classes: {len(np.unique(y))}")
+        
+        # Split data
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+        
+        # Train decision tree
+        tree = DecisionTree(max_depth=5, min_samples_split=5, criterion='gini')
+        tree.feature_names = feature_names
+        tree.class_names = class_names
+        tree.fit(X_train, y_train)
+        
+        # Evaluate
+        train_accuracy = tree.score(X_train, y_train)
+        test_accuracy = tree.score(X_test, y_test)
+        tree_info = tree.get_tree_info()
+        
+        print(f"Training Accuracy: {train_accuracy:.3f}")
+        print(f"Test Accuracy: {test_accuracy:.3f}")
+        print(f"Tree Depth: {tree_info['depth']}")
+        print(f"Number of Nodes: {tree_info['nodes']}")
+        print(f"Number of Leaves: {tree_info['leaves']}")
+        
+        # Show tree structure (first few levels)
+        print("\nTree Structure (first 3 levels):")
+        print(tree.visualize_tree(max_depth_show=3))
+        
+        # Plot feature importances
+        tree.plot_feature_importances()
+        
+        # Compare criteria
+        print("Comparing splitting criteria...")
+        criteria_results = compare_criteria(X, y, feature_names)
+        
+        for criterion, results in criteria_results.items():
+            print(f"{criterion.title()}: Train={results['train_score']:.3f}, "
+                  f"Test={results['test_score']:.3f}, "
+                  f"Nodes={results['tree_info']['nodes']}")
+        
+        # Study overfitting
+        print("Studying overfitting effects...")
+        optimal_depth = study_overfitting(X, y)
+        
+        # Train final model with optimal depth
+        print(f"\nTraining final model with optimal depth ({optimal_depth})...")
+        final_tree = DecisionTree(max_depth=optimal_depth, criterion='gini')
+        final_tree.feature_names = feature_names
+        final_tree.class_names = class_names
+        final_tree.fit(X_train, y_train)
+        
+        final_train_acc = final_tree.score(X_train, y_train)
+        final_test_acc = final_tree.score(X_test, y_test)
+        
+        print(f"Final Model - Train: {final_train_acc:.3f}, Test: {final_test_acc:.3f}")
+        
+        print("-" * 40)
+
+if __name__ == "__main__":
+    main()
